@@ -4,7 +4,7 @@ import json
 import datetime
 %matplotlib inline
 
-key = "AIzaSyDdszGvndYAPl93LjTEzkcmcSntHNj5DCY"
+key = *******
 
 def get_stats(stuff):
     stat_url="https://www.googleapis.com/youtube/v3/videos?id="+str(list(stuff)).replace("[","").replace("]","").replace("'","")+"&key="+key+"&part=snippet,contentDetails,statistics,status"
