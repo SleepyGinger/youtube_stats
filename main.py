@@ -145,3 +145,4 @@ df.plot(x='Date', y='Like_Ratio', kind='line', title='Like Percentage Over Time'
 most_liked['links'][:10]
 most_viewed['links'][:10]
 liked['links'][:10]
+
