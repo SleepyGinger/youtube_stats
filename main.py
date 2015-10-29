@@ -3,124 +3,120 @@ import pandas as pd
 import json
 import datetime
 
+key ='&key=*INSERT_YOUR_API_KEY*'
+base_url = 'https://www.googleapis.com/youtube/v3/'
+base_url_search = 'https://www.googleapis.com/youtube/v3/search?'
+snip = 'part=snippet&maxResults=50'
 
-key = *******
-
-def channel_id(channel):
-    url="https://www.googleapis.com/youtube/v3/channels?part=snippet&forUsername="+channel+"&key="+key
+def gets_id(username):
+    url=base_url+"channels?part=snippet&forUsername="+username+key
 
     search_result=json.loads(requests.get(url).text)
-    channel_id = search_result['items'][0]['id']
-    return str(channel_id)
+    user_id = search_result['items'][0]['id']
+    return str(user_id)
 
-def video_ID(content):
-    id_list=[]
+def gets_video_id(content):
+    video_ids=[]
     for video in content['items']:
-        listy = video['id']['videoId']
-        id_list.append(listy)
+        ids = video['id']['videoId']
+        video_ids.append(ids)
     
-    return id_list
+    return video_ids
 
-def get_stats(stuff):
-    stat_url="https://www.googleapis.com/youtube/v3/videos?id="+str(list(stuff)).replace("[","").replace("]","").replace("'","")+"&key="+key+ \
-"&part=snippet,contentDetails,statistics,status"
+
+def grabs_stats(chunks):
+    
+    temp_dict=[]
+    for x in chunks:
+        a=gets_stats(x)
+        temp_dict.append(a)
+
+    stats=[]
+    for video in temp_dict:
+        tags=[]
+        for stat in video['items']:
+            desc = stat['snippet']['description']
+            tit = stat['snippet']['title']
+            date = stat['snippet']['publishedAt']
+            views = int(stat['statistics']['viewCount'])
+            comments = int(stat['statistics']['commentCount'])
+            img_thum = stat['snippet']['thumbnails']['medium']['url']
+            try:
+                dislike = int(stat['statistics']['dislikeCount'])
+                like = int(stat['statistics']['likeCount'])
+                tags = stat['snippet']['tags']
+            except:
+                pass
+        
+            stats.append({"date":date, "image_thumb":img_thum, "tags":tags, "description":desc,"comments":comments, "title":tit, "views": views, "dislike_count":dislike, "like_count":like})
+    return stats
+
+def gets_stats(id_list):
+    id_list=str(list(id_list)).replace("[","").replace("]","").replace("'","")
+    stat_url=base_url+'videos?id='+id_list+'&maxResults=50&part=snippet,contentDetails,statistics,status'+key
     stat_content=json.loads(requests.get(stat_url).text)
     return stat_content
 
-def build_df(stuff, stats):
+def builds_df(id_list, stats):
     urls=[]
-    for x in stuff:
-        urls.append("https://www.youtube.com/watch?v="+x)
+    for one in id_list:
+        urls.append("https://www.youtube.com/watch?v="+one)
     
     df = pd.DataFrame(stats)
-    df['Link']=urls
-    df['Date'] = pd.to_datetime(df['Date'], format = "%Y-%m-%dT%H:%M:%S.%fZ")
-
+    df['link']=urls
+    df['date'] = pd.to_datetime(df['date'], format = "%Y-%m-%dT%H:%M:%S.%fZ")
+    time_format=df.date.map(lambda x: x.strftime('%Y-%m-%d'))
+    df['short_date'] = pd.to_datetime(time_format, format='%Y-%m-%d')
+    
     days_ago=[]
-    for x in df['Date']:
+    for x in df['date']:
         a = datetime.datetime.now() - x
         a = a.days
         if a == 0:
             a=1
         days_ago.append(a)
     
-    df['Days_Ago']=days_ago
-    df['Like_Per_Day']=df['Like_Count']/df['Days_Ago']
-    df['View_Per_Day']=df['Views']/df['Days_Ago']
-    df['Dislike_Per_Day']=df['Dislike_Count']/df['Days_Ago']
-    df['Comment_Per_Day']=df['Comments']/df['Days_Ago']
-    df['Like_Ratio']=df['Like_Per_Day']/df['View_Per_Day']
-    df['Dislike_Ratio']=df['Dislike_Per_Day']/df['View_Per_Day']
-    df['Like_vs_Dislike']=df['Dislike_Count']/df['Like_Count']
+    df['days_ago']=days_ago
+    df['comments_view']=df['comments']/df['views']
 
-    df['Like_Ratio']=df['Like_Per_Day']/df['View_Per_Day']
-    df['Like_Ratio'] = pd.Series(["{0:.2f}".format(val * 100) for val in df['Like_Ratio']])
-    df['Like_Ratio'] = df['Like_Ratio'].astype(float)
-
-    df['Dislike_Ratio']=df['Dislike_Per_Day']/df['View_Per_Day']
-    df['Dislike_Ratio'] = pd.Series(["{0:.2f}".format(val * 100) for val in df['Dislike_Ratio']])
-    df['Dislike_Ratio'] = df['Dislike_Ratio'].astype(float)
+    df['like_dislike']=df['like_count']/df['dislike_count']
+    df['views_day']=df['views']/df['days_ago']
+    df['likes_views']=df['like_count']/df['views']
     
-    q=df.Date.map(lambda x: x.strftime('%Y-%m-%d'))
-    df['short_date']=pd.to_datetime(q, format='%Y-%m-%d')
-
+    #calculates zscores for stats_cols
+    stats_cols=['likes_views', 'like_dislike', 'views_day', 'comments_view']
+    for col in stats_cols:
+        col_zscore = col + '_z'
+        df[col_zscore] = (df[col] - df[col].mean())/df[col].std()
+    
+    df['multi'] = df['likes_views_z']+df['like_dislike_z']+df['views_day_z']
+    df['multi+1'] = df['likes_views_z']+df['like_dislike_z']+df['views_day_z']+df['comments_view_z']
+    df['times1']=df['like_dislike']+(df['views_day']+df['likes_views'])
+    
+    df['like_dislike_rank']=df.like_dislike.rank(ascending=False)
+    df['views_day_rank']=df.views_day.rank(ascending=False)
+    df['likes_views_rank']=df.likes_views.rank(ascending=False)
+    
     
     return pd.DataFrame(df)
 
-def build_stats(chunks):
-    temp_dict=[]
-    for x in chunks:
-        a=get_stats(x)
-        temp_dict.append(a)
-
-    stats=[]
-    for x in temp_dict:
-        tags=[]
-        for thing in x['items']:
-            desc = thing['snippet']['description']
-            tit = thing['snippet']['title']
-            date = thing['snippet']['publishedAt']
-            views = int(thing['statistics']['viewCount'])
-            comments = int(thing['statistics']['commentCount'])
-            fav = thing['statistics']['favoriteCount']
-            img_thum=thing['snippet']['thumbnails']['medium']['url']
-            try:
-                dislike = int(thing['statistics']['dislikeCount'])
-                like = int(thing['statistics']['likeCount'])
-                tags = thing['snippet']['tags']
-            except:
-                pass
-        
-            stats.append({"Description":desc, "Title":tit, "Views": views, "Comments":comments, "Favorite_Count":fav, "Dislike_Count":dislike, "Like_Count":like, "Date":date, "Image Thumb":img_thum, "Tags":tags})
-    return stats
-    
-try:
-    name=raw_input('Channel Name: ')
-    ids=channel_id(name)
-
-    url="https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&part=snippet&channelId="+ids+"&maxResults=50&key="+key
-    content = json.loads(requests.get(url).text)
-    
-except:
-    ids=name
-    url="https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&part=snippet&channelId="+ids+"&maxResults=50&key="+key
+def search():    
+    query = raw_input('Search: ').replace (" ", "+")
+    url = base_url_search+snip+"&q="+query+"&type=video"+key
     content = json.loads(requests.get(url).text)
 
-channelTitle=content['items'][0]['snippet']['channelTitle'].capitalize()   
+    stuff=[]
+    stuff = gets_video_id(content)
 
-stuff=[]
+    num=0
 
-stuff = video_ID(content)
+    channelTitle = content['items'][0]['snippet']['channelTitle'].capitalize() 
+    num_results=float(int(content['pageInfo']['totalResults']))
 
-
-num=0
-
-try:
-    while num<5:
+    while content['nextPageToken'] and num<5:
         next_page=content['nextPageToken'].encode('UTF8')
         content=''
-        url = "https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&order=viewCount&part=snippet&channelId="+ids+"&maxResults=50&key="+key \
-    +"&pageToken="+next_page
+        url = base_url_search+snip+"&q="+query+"&type=video&pageToken="+next_page+key
         content = json.loads(requests.get(url).text)
         num+=1
     
@@ -128,33 +124,99 @@ try:
             if videos['id']['kind']=='youtube#video':
                 vid_ids=videos['id']['videoId']
                 stuff.append(vid_ids)
-except:
-    pass
             
-stuff = [x.encode('UTF8') for x in stuff]
-chunks=[stuff[i:i+50] for i  in range(0, len(stuff), 50)]
+    stuff = [x.encode('UTF8') for x in stuff]
+    chunks=[stuff[i:i+50] for i  in range(0, len(stuff), 50)]
+    
+    return chunks, stuff, channelTitle, num_results
+    
+def channel():
+    try:
+        name=raw_input('Channel Name: ')
+        user_id=gets_id(name)
 
-stats = build_stats(chunks)
-df = build_df(stuff, stats)
+        url = base_url_search+snip+'&type=video&order=viewCount&channelId='+user_id+key
+        content = json.loads(requests.get(url).text)
+    
+    except:
+        user_id=name
+        url = base_url_search+snip+'&type=video&order=viewCount&channelId='+user_id+key
+        content = json.loads(requests.get(url).text)
 
-most_liked=df.sort(columns='Like_Ratio', ascending=0)
-most_commented=df.sort(columns='Comments', ascending=0)
-most_disliked=df.sort(columns='Dislike_Ratio', ascending=0)
-most_viewed = df.sort(columns='View_Per_Day', ascending=0)
-liked = df.sort(columns='Like_vs_Dislike', ascending=1)
-dated=df.sort(columns='short_date', ascending=1)
+    channelTitle=content['items'][0]['snippet']['channelTitle'].capitalize()   
+
+    stuff=[]
+
+    stuff = gets_video_id(content)
+
+    num_results=float(int(content['pageInfo']['totalResults']))
+    
+    num=0
+
+    try:
+        while content['nextPageToken'] and num<20:
+            next_page=content['nextPageToken'].encode('UTF8')
+            content=''
+            url = base_url_search+snip+'&type=video&order=viewCount&channelId='+user_id+'&pageToken='+next_page+key
+            content = json.loads(requests.get(url).text)
+            num+=1
+    
+            for videos in content['items']:
+                if videos['id']['kind']=='youtube#video':
+                    vid_ids=videos['id']['videoId']
+                    stuff.append(vid_ids)
+    except:
+        pass
+            
+    stuff = [x.encode('UTF8') for x in stuff]
+    chunks=[stuff[i:i+50] for i  in range(0, len(stuff), 50)]
+    
+    return chunks, stuff, channelTitle, num_results
+    
+#chunks, stuff, channelTitle, num_results = search()
+    
+chunks, stuff, channelTitle, num_results = channel()
+    
+stats=grabs_stats(chunks)
+
+df=builds_df(stuff, stats)
+
+print 'analysing '+str((len(df)/num_results)*100)[:4]+'% of '+channelTitle
+
+top_ranked=df[(df['likes_views_rank']<10) & (df['views_day_rank']<10) & (df['like_dislike_rank']<10)]
+most_liked=df[(df['likes_views_rank']<10) & (df['like_dislike_rank']<10)]
+popular_like=df[(df['views_day_rank']<10) & (df['like_dislike_rank']<10)]
 
 reindex=df.short_date.value_counts().reindex(pd.date_range(min(df.short_date), max(df.short_date)),fill_value=0)
 max_index=max(reindex)+3
-reindex.plot(kind='line', ylim=(-1, max_index), title=channelTitle+' Views Over Time', legend=False)
-df.plot(x='Date', y='Views', kind='line', title='Views Over Time', legend=False)
-df.plot(x='Date', y=['Like_Ratio', 'Dislike_Ratio'], kind='line', title='Like Percentage Over Time', color=["g", "r"])
-df.plot(x='Date', y='Dislike_Ratio', kind='line', title='Dislike Percentage Over Time', legend=False)
-df.plot(x='Date', y='Like_Ratio', kind='line', title='Like Percentage Over Time', legend=False)
+reindex.plot(kind='line', ylim=(-1, max_index), title=channelTitle+' Uploads Over Time', legend=False)
 
-most_liked['Link'][:5]
-most_viewed['Link'][:5]
-liked['Link'][:5]
-most_disliked['Link'][:5]
-most_commented['Link'][:5]
+df.plot(x='date', y='views', kind='line', title=channelTitle+' Raw Views Over Time', legend=False)
+df.sort(columns='views', ascending=0)['link'][:5]
 
+df.plot(x='date', y='views', kind='line', title=channelTitle+' Raw Views Over Time', legend=False)
+df.sort(columns='views', ascending=0)['link'][:5]
+
+df.plot(x='date', y='like_dislike', kind='line', title=channelTitle+' Likes VS Dislikes', legend=False, color='y')
+df.sort(columns='like_dislike', ascending =0)['link'][:5]
+
+df.plot(x='date', y='views_day', kind='line', title=channelTitle+' Views Per Day', legend=False)
+df.sort(columns='views_day_rank', ascending =1)['link'][:5]
+
+df.plot(x='date', y='comments_view', kind='line', title=channelTitle+' Views Per Day', legend=False)
+df.sort(columns='comments_view', ascending =0)['link'][:3]
+
+df.plot(x='date', y='likes_views_rank', kind='line', title=channelTitle+' Likes Per View', legend=False, color='g')
+df.sort(columns='likes_views_rank', ascending =1)['link'][:3]
+
+df.plot(x='date', y='likes_views_rank', kind='line', title=channelTitle+' Likes Per View', legend=False, color='g')
+df.sort(columns='likes_views_rank', ascending =1)['link'][:3]
+
+df.plot(x='date', y='like_count', kind='line', title='Like Percentage Over Time', color="g")
+df.plot(x='date', y='dislike_count', kind='line', title='Like Percentage Over Time', color="r")
+
+top_ranked['link']
+
+most_liked['link']
+
+popular_like['link']
