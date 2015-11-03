@@ -75,7 +75,9 @@ def builds_df(id_list, stats):
         if a == 0:
             a=1
         days_ago.append(a)
-    
+
+    df.dislike_count.replace({0:float(1)}, inplace=True)
+    df.like_count.replace({0:int(1)}, inplace=True) )}))})
     df['days_ago']=days_ago
     df['comments_view']=df['comments']/df['views']
 
@@ -173,8 +175,10 @@ def channel():
     
     return chunks, stuff, channelTitle, num_results
     
+#uncomment this to search 
 #chunks, stuff, channelTitle, num_results = search()
-    
+
+#e.g. of channel name: vice from https://www.youtube.com/user/vice
 chunks, stuff, channelTitle, num_results = channel()
     
 stats=grabs_stats(chunks)
@@ -220,3 +224,6 @@ top_ranked['link']
 most_liked['link']
 
 popular_like['link']
+
+#if youd like to export to csv
+#df.to_csv('export.csv')
