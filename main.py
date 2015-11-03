@@ -35,8 +35,8 @@ def grabs_stats(chunks):
     for video in temp_dict:
         tags=[]
         for stat in video['items']:
-            desc = stat['snippet']['description']
-            tit = stat['snippet']['title']
+            desc = stat['snippet']['description'].encode('utf-8', 'replace')
+            tit = stat['snippet']['title'].encode('utf-8', 'replace')
             date = stat['snippet']['publishedAt']
             views = int(stat['statistics']['viewCount'])
             comments = int(stat['statistics']['commentCount'])
