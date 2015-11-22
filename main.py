@@ -175,7 +175,7 @@ def channel():
     
     return chunks, stuff, channelTitle, num_results
     
-#uncomment this to search 
+#uncomment this to search youtube 
 #chunks, stuff, channelTitle, num_results = search()
 
 #e.g. of channel name: vice from https://www.youtube.com/user/vice
